@@ -3,13 +3,11 @@ from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# TODO: Создать и заполнить .env, ориентируясь на .env_example
-
 SECRET_KEY = config("DJANGO_SECRET_KEY")
 
 DEBUG = config("DJANGO_DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
 
 # Application definition
@@ -21,7 +19,15 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "users",
+    "projects",
 ]
+
+
+AUTH_USER_MODEL = "users.User"
+
+
+LOGIN_URL = "/users/login/"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -93,7 +99,7 @@ if not DEBUG:
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "ru-ru"
 
 TIME_ZONE = "UTC"
 

@@ -102,6 +102,58 @@ python manage.py runserver
 
 Теперь проект доступен по адресу [http://localhost:8000](http://localhost:8000). 
 Если видите ракету с надписью "The install worked successfully! Congratulations!", то запуск прошёл успешно, Django работает!
-Осталось всего ничего: реализовать весь проект!
 
 Если в процессе разработки способ развертывания приложения поменяется, обновите `readme.md` с пометкой ревьюеру, как запускать и проверять приложение.
+
+---
+
+# Примечания для ревьюера
+
+**Вариант задания:** 1 
+
+# Запуск проекта
+
+```bash
+# 1. Запуск PostgreSQL в Docker и создание .env
+docker compose up -d
+
+cp .env_example .env 
+#впишите в .env нужные данные или оставьте по умолчанию
+
+# 2. Создание и активирование venv
+python -m venv venv
+# или
+py -3.10 -m venv venv 
+
+source venv/bin/activate   # Linux/Mac
+# или: 
+. venv\Scripts\activate  # Windows
+
+# 3. Установка зависимостей 
+pip install -r requirements.txt
+
+# 4. Применение миграций и запуск сервера
+python manage.py migrate
+python manage.py runserver
+
+# Также можно опционально добавить тестовые данные
+python manage.py seed_data
+```
+
+
+
+Проект доступен по адресу: http://localhost:8000 (редирект на /projects/list/)
+
+### Запуск тестов
+
+Тесты запускаются при работающем Docker (PostgreSQL):
+
+```bash
+. venv\Scripts\activate   # Windows
+pytest
+```
+
+
+Реализовано автоматическое тестирование в GitHub Actions + ruff при пуше в main
+
+
