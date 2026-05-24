@@ -1,8 +1,12 @@
-﻿from django.contrib.auth.decorators import login_required
+﻿from http import HTTPStatus
+
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+
+from team_finder.utils import paginate
 
 from .forms import ProjectForm
 from .models import Project
@@ -17,9 +21,7 @@ def project_list_view(request):
         .prefetch_related("participants")
         .order_by("-created_at")
     )
-    paginator = Paginator(queryset, PROJECTS_PER_PAGE)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginate(request, queryset, PROJECTS_PER_PAGE)
     return render(request, "projects/project_list.html", {
         "page_obj": page_obj,
         "projects": page_obj.object_list,
@@ -34,9 +36,7 @@ def favorites_view(request):
         .prefetch_related("participants")
         .order_by("-created_at")
     )
-    paginator = Paginator(queryset, PROJECTS_PER_PAGE)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginate(request, queryset, PROJECTS_PER_PAGE)
     return render(request, "projects/favorite_projects.html", {
         "page_obj": page_obj,
         "projects": page_obj.object_list,
@@ -59,7 +59,7 @@ def create_project_view(request):
         project.owner = request.user
         project.save()
         project.participants.add(request.user)
-        return redirect(f"/projects/{project.pk}/")
+        return redirect(reverse("projects:detail", kwargs={"project_id": project.pk}))
     return render(request, "projects/create-project.html", {"form": form, "is_edit": False})
 
 
@@ -71,49 +71,68 @@ def edit_project_view(request, project_id):
     form = ProjectForm(request.POST or None, instance=project)
     if request.method == "POST" and form.is_valid():
         form.save()
-        return redirect(f"/projects/{project.pk}/")
+        return redirect(reverse("projects:detail", kwargs={"project_id": project.pk}))
     return render(request, "projects/create-project.html", {"form": form, "is_edit": True})
 
 
 @login_required
 def toggle_favorite(request, project_id):
     if request.method != "POST":
-        return JsonResponse({"status": "error"}, status=405)
-    project = get_object_or_404(Project, pk=project_id)
+        return JsonResponse({"status": "error"}, status=HTTPStatus.METHOD_NOT_ALLOWED)
+    project = Project.objects.filter(pk=project_id).first()
+    if project is None:
+        return JsonResponse(
+            {"status": "error", "message": "Проект не найден"},
+            status=HTTPStatus.NOT_FOUND,
+        )
     user = request.user
-    if project in user.favorites.all():
+    was_favorited = user.favorites.filter(pk=project.pk).exists()
+    if was_favorited:
         user.favorites.remove(project)
-        favorited = False
     else:
         user.favorites.add(project)
-        favorited = True
-    return JsonResponse({"status": "ok", "favorited": favorited})
+    return JsonResponse({"status": "ok", "favorited": not was_favorited})
 
 
 @login_required
 def toggle_participate(request, project_id):
     if request.method != "POST":
-        return JsonResponse({"status": "error"}, status=405)
-    project = get_object_or_404(Project, pk=project_id)
+        return JsonResponse({"status": "error"}, status=HTTPStatus.METHOD_NOT_ALLOWED)
+    project = Project.objects.filter(pk=project_id).first()
+    if project is None:
+        return JsonResponse(
+            {"status": "error", "message": "Проект не найден"},
+            status=HTTPStatus.NOT_FOUND,
+        )
     user = request.user
-    if user in project.participants.all():
+    was_participating = project.participants.filter(pk=user.pk).exists()
+    if was_participating:
         project.participants.remove(user)
-        participating = False
     else:
         project.participants.add(user)
-        participating = True
-    return JsonResponse({"status": "ok", "participating": participating})
+    return JsonResponse({"status": "ok", "participating": not was_participating})
 
 
 @login_required
 def complete_project(request, project_id):
     if request.method != "POST":
-        return JsonResponse({"status": "error"}, status=405)
-    project = get_object_or_404(Project, pk=project_id)
+        return JsonResponse({"status": "error"}, status=HTTPStatus.METHOD_NOT_ALLOWED)
+    project = Project.objects.filter(pk=project_id).first()
+    if project is None:
+        return JsonResponse(
+            {"status": "error", "message": "Проект не найден"},
+            status=HTTPStatus.NOT_FOUND,
+        )
     if project.owner != request.user and not request.user.is_staff:
-        return JsonResponse({"status": "error", "message": "Нет прав"}, status=403)
+        return JsonResponse(
+            {"status": "error", "message": "Нет прав"},
+            status=HTTPStatus.FORBIDDEN,
+        )
     if project.status != Project.STATUS_OPEN:
-        return JsonResponse({"status": "error", "message": "Проект уже закрыт"}, status=400)
+        return JsonResponse(
+            {"status": "error", "message": "Проект уже закрыт"},
+            status=HTTPStatus.BAD_REQUEST,
+        )
     project.status = Project.STATUS_CLOSED
     project.save(update_fields=["status"])
     return JsonResponse({"status": "ok", "project_status": "closed"})

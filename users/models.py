@@ -1,35 +1,24 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
+from .managers import UserManager
 from .utils import generate_avatar
 
-
-class UserManager(BaseUserManager):
-    def create_user(self, email, name, surname, password=None, **extra_fields):
-        if not email:
-            raise ValueError("Email обязателен")
-        email = self.normalize_email(email)
-        user = self.model(email=email, name=name, surname=surname, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-
-    def create_superuser(self, email, name, surname, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_active", True)
-        extra_fields.setdefault("is_superuser", True)
-        return self.create_user(email, name, surname, password, **extra_fields)
+NAME_MAX_LENGTH = 124
+SURNAME_MAX_LENGTH = 124
+PHONE_MAX_LENGTH = 12
+ABOUT_MAX_LENGTH = 256
 
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField("Email", unique=True)
-    name = models.CharField("Имя", max_length=124)
-    surname = models.CharField("Фамилия", max_length=124)
+    name = models.CharField("Имя", max_length=NAME_MAX_LENGTH)
+    surname = models.CharField("Фамилия", max_length=SURNAME_MAX_LENGTH)
     avatar = models.ImageField("Аватар", upload_to="avatars/")
-    phone = models.CharField("Телефон", max_length=12)
+    phone = models.CharField("Телефон", max_length=PHONE_MAX_LENGTH)
     github_url = models.URLField("GitHub", blank=True)
-    about = models.TextField("О себе", max_length=256, blank=True)
+    about = models.TextField("О себе", max_length=ABOUT_MAX_LENGTH, blank=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField("Дата регистрации", default=timezone.now)

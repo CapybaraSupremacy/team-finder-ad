@@ -1,15 +1,8 @@
-import re
-
 from django import forms
 from django.core.exceptions import ValidationError
 
 from .models import User
-from .utils import normalize_phone
-
-
-def validate_github_url(value):
-    if value and "github.com" not in value:
-        raise ValidationError("Ссылка должна вести на GitHub (github.com).")
+from .utils import validate_github_url, validate_phone
 
 
 class RegisterForm(forms.Form):
@@ -23,6 +16,15 @@ class RegisterForm(forms.Form):
         if User.objects.filter(email=email).exists():
             raise ValidationError("Пользователь с таким email уже существует.")
         return email
+
+    def save(self):
+        # Создаёт и возвращает нового пользователя
+        return User.objects.create_user(
+            email=self.cleaned_data["email"],
+            name=self.cleaned_data["name"],
+            surname=self.cleaned_data["surname"],
+            password=self.cleaned_data["password"],
+        )
 
 
 class LoginForm(forms.Form):
@@ -52,25 +54,7 @@ class ProfileEditForm(forms.ModelForm):
 
     def clean_phone(self):
         phone = self.cleaned_data.get("phone", "").strip()
-        if not phone:
-            return phone
-
-        pattern = r"^(\+7|8)\d{10}$"
-        if not re.match(pattern, phone):
-            raise ValidationError(
-                "Введите номер в формате 8XXXXXXXXXX или +7XXXXXXXXXX."
-            )
-
-        # приводим к единому формату
-        normalized = normalize_phone(phone)
-
-        qs = User.objects.filter(phone__in=[normalized, phone])
-        if self.current_user:
-            qs = qs.exclude(pk=self.current_user.pk)
-        if qs.exists():
-            raise ValidationError("Этот номер телефона уже используется.")
-
-        return normalized
+        return validate_phone(phone, exclude_user=self.current_user)
 
     def clean_github_url(self):
         url = self.cleaned_data.get("github_url", "")

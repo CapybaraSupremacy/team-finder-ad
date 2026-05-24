@@ -1,25 +1,27 @@
 ﻿from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+
+from team_finder.utils import paginate
 
 from .forms import ChangePasswordForm, LoginForm, ProfileEditForm, RegisterForm
 from .models import User
 
 USERS_PER_PAGE = 12
 
+FILTER_OWNERS_OF_FAVORITE = "owners-of-favorite-projects"
+FILTER_OWNERS_OF_PARTICIPATING = "owners-of-participating-projects"
+FILTER_INTERESTED_IN_MY = "interested-in-my-projects"
+FILTER_PARTICIPANTS_OF_MY = "participants-of-my-projects"
+
 
 def register_view(request):
     form = RegisterForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        user = User.objects.create_user(
-            email=form.cleaned_data["email"],
-            name=form.cleaned_data["name"],
-            surname=form.cleaned_data["surname"],
-            password=form.cleaned_data["password"],
-        )
+        user = form.save()
         login(request, user)
-        return redirect("/projects/list/")
+        return redirect(reverse("projects:list"))
     return render(request, "users/register.html", {"form": form})
 
 
@@ -34,14 +36,14 @@ def login_view(request):
             )
             if user is not None:
                 login(request, user)
-                return redirect("/projects/list/")
+                return redirect(reverse("projects:list"))
             form.add_error(None, "Неверный email или пароль")
     return render(request, "users/login.html", {"form": form})
 
 
 def logout_view(request):
     logout(request)
-    return redirect("/projects/list/")
+    return redirect(reverse("projects:list"))
 
 
 def user_detail_view(request, user_id):
@@ -60,7 +62,7 @@ def edit_profile_view(request):
     )
     if request.method == "POST" and form.is_valid():
         form.save()
-        return redirect(f"/users/{user.pk}/")
+        return redirect(reverse("users:detail", kwargs={"user_id": user.pk}))
     return render(request, "users/edit_profile.html", {"form": form})
 
 
@@ -72,7 +74,7 @@ def change_password_view(request):
         user.set_password(form.cleaned_data["new_password1"])
         user.save()
         login(request, user)
-        return redirect(f"/users/{user.pk}/")
+        return redirect(reverse("users:detail", kwargs={"user_id": user.pk}))
     return render(request, "users/change_password.html", {"form": form})
 
 
@@ -83,17 +85,17 @@ def users_list_view(request):
 
     if request.user.is_authenticated:
         active_filter = request.GET.get("filter", "")
-        if active_filter == "owners-of-favorite-projects":
+        if active_filter == FILTER_OWNERS_OF_FAVORITE:
             owner_ids = request.user.favorites.values_list("owner_id", flat=True)
             queryset = queryset.filter(pk__in=owner_ids)
-        elif active_filter == "owners-of-participating-projects":
+        elif active_filter == FILTER_OWNERS_OF_PARTICIPATING:
             owner_ids = request.user.participated_projects.values_list("owner_id", flat=True)
             queryset = queryset.filter(pk__in=owner_ids)
-        elif active_filter == "interested-in-my-projects":
+        elif active_filter == FILTER_INTERESTED_IN_MY:
             queryset = queryset.filter(
                 favorites__owner=request.user
             ).distinct()
-        elif active_filter == "participants-of-my-projects":
+        elif active_filter == FILTER_PARTICIPANTS_OF_MY:
             queryset = queryset.filter(
                 participated_projects__owner=request.user
             ).distinct()
@@ -103,9 +105,7 @@ def users_list_view(request):
         if active_filter:
             query_prefix = f"filter={active_filter}&"
 
-    paginator = Paginator(queryset, USERS_PER_PAGE)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginate(request, queryset, USERS_PER_PAGE)
 
     return render(request, "users/participants.html", {
         "page_obj": page_obj,

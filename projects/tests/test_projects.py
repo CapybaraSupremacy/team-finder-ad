@@ -1,6 +1,8 @@
 ﻿import json
+from http import HTTPStatus
 
 import pytest
+from django.urls import reverse
 
 from projects.models import Project
 
@@ -8,7 +10,7 @@ from projects.models import Project
 @pytest.mark.django_db
 def test_create_project_sets_owner_and_participant(auth_client, user):
     # Автор проекта автоматически добавляется в участники
-    auth_client.post("/projects/create-project/", {
+    auth_client.post(reverse("projects:create"), {
         "name": "Новый проект",
         "description": "Описание",
         "github_url": "https://github.com/test/repo",
@@ -22,8 +24,8 @@ def test_create_project_sets_owner_and_participant(auth_client, user):
 @pytest.mark.django_db
 def test_owner_can_complete_project(auth_client, project):
     # Завершение проекта: JSON-ответ и смена статуса
-    response = auth_client.post(f"/projects/{project.pk}/complete/")
-    assert response.status_code == 200
+    response = auth_client.post(reverse("projects:complete", kwargs={"project_id": project.pk}))
+    assert response.status_code == HTTPStatus.OK
     data = json.loads(response.content)
     assert data["project_status"] == "closed"
     project.refresh_from_db()
@@ -33,7 +35,9 @@ def test_owner_can_complete_project(auth_client, project):
 @pytest.mark.django_db
 def test_toggle_favorite_adds_project(auth_client, user, project):
     # добавление проекта в избранное через JSON-эндпоинт
-    response = auth_client.post(f"/projects/{project.pk}/toggle-favorite/")
+    response = auth_client.post(
+        reverse("projects:toggle_favorite", kwargs={"project_id": project.pk})
+    )
     data = json.loads(response.content)
     assert data["status"] == "ok"
     assert data["favorited"] is True
@@ -43,5 +47,5 @@ def test_toggle_favorite_adds_project(auth_client, user, project):
 @pytest.mark.django_db
 def test_favorites_page_requires_login(client):
     # страница избранного доступна только авторизованным
-    response = client.get("/projects/favorites/")
-    assert response.status_code == 302
+    response = client.get(reverse("projects:favorites"))
+    assert response.status_code == HTTPStatus.FOUND
